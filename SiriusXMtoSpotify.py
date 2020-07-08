@@ -8,6 +8,9 @@ import re
 from json.decoder import JSONDecodeError
 import time
 import datetime
+import requests
+import json
+
 
 
 #EDIT THESE
@@ -21,65 +24,39 @@ playlist_id= 'YOUR PLAYLIST ID'
 scope = 'playlist-modify-public'
 track_id = ['']
 token = 'this is a temp token'
+currentdata = ''
 
-def setup(username, scope=None, client_id = None, client_secret = None, redirect_uri = None):
-    sp_oauth = oauth2.SpotifyOAuth(client_id, client_secret, redirect_uri, scope=scope)
-    token_info = sp_oauth.get_cached_token()
-    if not token_info:
-        print('''
-            User authentication requires interaction with your
-            web browser. Once you enter your credentials and
-            give authorization, you will be redirected to
-            a url.  Paste that url you were directed to to
-            complete the authorization.
-        ''')
-        auth_url = sp_oauth.get_authorize_url()
-        try:
-            import webbrowser
-            webbrowser.open(auth_url)
-            print("Opened %s in your browser" % auth_url)
-        except:
-            print("Please navigate here: %s" % auth_url)
+sp_oauth = oauth2.SpotifyOAuth(client_id=client_id,client_secret=client_secret,redirect_uri=redirect_uri,scope=scope)
+token_info = sp_oauth.get_cached_token()
 
-        print()
-        print()
-        try:
-            response = raw_input("Enter the URL you were redirected to: ")
-        except NameError:
-            response = input("Enter the URL you were redirected to: ")
+if not token_info:
+    auth_url = sp_oauth.get_authorize_url()
+    print(auth_url)
+    response = input('Paste the above link into your browser, then paste the redirect url here: ')
 
-        print()
-        print()
+    code = sp_oauth.parse_response_code(response)
+    token_info = sp_oauth.get_access_token(code)
 
-        code = sp_oauth.parse_response_code(response)
-        token_info = sp_oauth.get_access_token(code)
-    # Auth'ed API request
-    if token_info:
-        global token
-        token = token_info
-        return sp_oauth
-    else:
-        return None
-
-
-try:
-    spoauth = setup(username, scope, client_id, client_secret, redirect_uri)
-except (AttributeError, JSONDecodeError):
-    os.remove(f".cache-{username}")
-    spoauth = setup(username, scope, client_id, client_secret, redirect_uri)
-
+    token = token_info['access_token']
 
 if token:
-    sp = spotipy.Spotify(auth=token['access_token'])
-    url = 'http://www.dogstarradio.com/channelrss/51.txt' #change 51 to the channel to be watched.
+    sp = spotipy.Spotify(auth=token)
+    # for other channels you need to change the deepLinkId. This example code is for BPM which is channel 51.
+    url = 'http://player.siriusxm.com/rest/v2/experience/modules/get/deeplink?deepLinkId=BPM&deepLink-type=live' 
     while(True):
         try:
             req = urllib.request.Request(url)
             resp = urllib.request.urlopen(req)
             respData = resp.read().decode("utf-8")
-            dataArray = respData.split("\n")
-            artist = dataArray[3].split("/")
-            results = sp.search(q='artist:' + artist[0] + " track:" + dataArray[4], type='track')
+            respJSON = json.loads(respData)
+
+
+            track = respJSON['ModuleListResponse']['moduleList']['modules'][0]['moduleResponse']['moduleDetails']['liveChannelResponse']['liveChannelResponses'][0]['markerLists'][0]['markers'][0]['cut']['title']
+            artist = respJSON['ModuleListResponse']['moduleList']['modules'][0]['moduleResponse']['moduleDetails']['liveChannelResponse']['liveChannelResponses'][0]['markerLists'][0]['markers'][0]['cut']['artists'][0]['name']
+            artist.replace('/', ' ')
+
+            print(artist, track)
+            results = sp.search(q='artist:' + artist.replace('/', ' ') + " track:" + track, type='track')
             try:
                 track_id[0] = results['tracks']['items'][0]['id']
                 sp.user_playlist_remove_all_occurrences_of_tracks(username, playlist_id, track_id, snapshot_id=None)
@@ -87,8 +64,6 @@ if token:
             except:
                 pass
                 print("failed")
-
-
 
             #delete old songs
             activePlaylist = sp.user_playlist(username, playlist_id)
@@ -98,12 +73,19 @@ if token:
                     sp.user_playlist_remove_all_occurrences_of_tracks(username, playlist_id, [track['track']['id']], snapshot_id=None)
 
 
-            time.sleep(60)
 
-        except:
-            token = spoauth.refresh_access_token(token['refresh_token'])
-            sp = spotipy.Spotify(auth=token['access_token'])
 
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
+            if sp_oauth.is_token_expired(token_info):
+                token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+                token = token_info['access_token']
+                sp = spotipy.Spotify(auth=token)
+        
+        # check again after a minute.
+        time.sleep(60)
 
 else:
     print ("Can't get token for", username)
