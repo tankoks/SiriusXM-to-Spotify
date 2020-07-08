@@ -1,6 +1,8 @@
 # SiriusXM to Spotify
 
-This application takes a Sirius XM info stream from http://www.dogstarradio.com/ and tries to add the songs to a Spotify Playlist
+This application takes a Sirius XM info stream and tries to add the songs to a Spotify Playlist.
+
+An example playlist can be found [here](https://kokse.ng/chill)
 
 ### Prerequisites
 * sys
@@ -31,7 +33,3 @@ See also the list of [contributors](https://github.com/your/project/contributors
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-Special thanks to http://www.dogstarradio.com/ from which the song information is gathered.
